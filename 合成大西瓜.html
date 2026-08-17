@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>恶搞版合成大丑照</title>
+    <!-- Matter.js Physics Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <!-- html2canvas for Save to Album functionality -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Canvas Confetti for Victory Animation -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #2c3e50;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        /* Fixed viewport container preventing page zoom / resize issues */
+        #game-container {
+            position: relative;
+            width: 100vw;
+            max-width: 480px;
+            height: 100vh;
+            max-height: 840px;
+            background: #f0e6d2;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        #header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            background: rgba(255, 255, 255, 0.4);
+            z-index: 10;
+        }
+        .title { font-size: 18px; font-weight: bold; color: #333; }
+        .score { font-size: 16px; font-weight: bold; color: #e74c3c; }
+        
+        #game-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Settlement Overlay */
+        #victory-modal {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 100;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        #poster-card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 300px;
+            width: 100%;
+        }
+        #poster-card img {
+            width: 100%;
+            height: 260px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 3px solid #ffcc00;
+        }
+        .victory-title {
+            font-size: 22px;
+            font-weight: 900;
+            color: #d63031;
+            margin: 12px 0 5px;
+        }
+        .victory-sub {
+            font-size: 14px;
+            color: #636e72;
+            margin-bottom: 15px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            margin-top: 15px;
+        }
+        .btn {
+            flex: 1;
+            padding: 12px 0;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn-save { background: #2ecc71; color: white; }
+        .btn-restart { background: #e74c3c; color: white; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="header">
+        <div class="title">合成大丑照</div>
+        <div class="score">得分: <span id="score-val">0</span></div>
+    </div>
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Victory Modal Popup -->
+    <div id="victory-modal">
+        <div id="poster-card">
+            <img id="final-photo" src="" alt="终极丑照">
+            <div class="victory-title">丑出天际！通关胜利！</div>
+            <div class="victory-sub">你成功解锁了等级7终极丑照！</div>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-save" onclick="saveToAlbum()">保存到相册</button>
+            <button class="btn btn-restart" onclick="restartGame()">再玩一次</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. Image configurations (Levels 1 to 7)
+    // Replace these placeholder data URLs or URLs with your 7 photo paths
+    const PHOTO_URLS = [
+        "微信图片_20260817092535_124_43.jpg", // L1 (Minimum 80px diameter / 40px radius)
+        "微信图片_20260817092537_125_43.jpg", // L2
+        "微信图片_20260817095323_129_43.jpg", // L3
+        "微信图片_20260817095417_130_43.jpg", // L4
+        "微信图片_20260817095651_132_43.jpg", // L5
+        "微信图片_20260817095250_128_43.jpg", // L6
+        "微信图片_20260817095418_131_43.jpg"  // L7 (Ultimate Level)
+    ];
+
+    // 7 size tiers (Diameters: 80px, 105px, 130px, 160px, 190px, 220px, 260px)
+    const RADIUS_TIERS = [40, 52.5, 65, 80, 95, 110, 130];
+    const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
+
+    // Preload Images
+    const loadedImages = [];
+    PHOTO_URLS.forEach((url) => {
+        const img = new Image();
+        img.src = url;
+        loadedImages.push(img);
+    });
+
+    // 2. Matter.js Setup
+    const { Engine, Render, Runner, Bodies, Composite, Constraint, Events, Body, Vector } = Matter;
+
+    const container = document.getElementById('game-container');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const engine = Engine.create({
+        gravity: { x: 0, y: 1.5, scale: 0.001 } // Moderate gravity
+    });
+
+    const canvas = document.getElementById('game-canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    // Add Container Boundaries
+    const wallOptions = { isStatic: true, restitution: 0.3, friction: 0.1 };
+    const ground = Bodies.rectangle(width / 2, height + 30, width, 60, wallOptions);
+    const leftWall = Bodies.rectangle(-30, height / 2, 60, height * 2, wallOptions);
+    const rightWall = Bodies.rectangle(width + 30, height / 2, 60, height * 2, wallOptions);
+    Composite.add(engine.world, [ground, leftWall, rightWall]);
+
+    let score = 0;
+    let currentBall = null;
+    let canDrop = true;
+    let gameEnded = false;
+
+    // 3. Spawning & Drag-and-Drop Control
+    function createPreviewBall() {
+        if (gameEnded) return;
+        // Spawns randomly between Level 1 and Level 3 for balanced difficulty (1-2 min gameplay)
+        const level = Math.floor(Math.random() * 3); 
+        const radius = RADIUS_TIERS[level];
+        
+        currentBall = {
+            x: width / 2,
+            y: 70,
+            radius: radius,
+            level: level
+        };
+        canDrop = true;
+    }
+
+    function dropBall(targetX) {
+        if (!canDrop || !currentBall || gameEnded) return;
+        canDrop = false;
+
+        const clampedX = Math.max(currentBall.radius, Math.min(width - currentBall.radius, targetX));
+        
+        const body = Bodies.circle(clampedX, currentBall.y, currentBall.radius, {
+            restitution: 0.35, // Elasticity / Bounciness
+            friction: 0.2,     // Squeezing / Sliding friction
+            density: 0.002,
+            label: 'ball',
+            customLevel: currentBall.level
+        });
+
+        Composite.add(engine.world, body);
+        currentBall = null;
+
+        setTimeout(() => {
+            createPreviewBall();
+        }, 600);
+    }
+
+    // Touch and Mouse Event Handling
+    let isDragging = false;
+    let touchX = width / 2;
+
+    function handleStart(x) {
+        if (!canDrop) return;
+        isDragging = true;
+        touchX = x;
+        if (currentBall) currentBall.x = Math.max(currentBall.radius, Math.min(width - currentBall.radius, touchX));
+    }
+
+    function handleMove(x) {
+        if (!isDragging || !currentBall) return;
+        touchX = x;
+        currentBall.x = Math.max(currentBall.radius, Math.min(width - currentBall.radius, touchX));
+    }
+
+    function handleEnd() {
+        if (!isDragging) return;
+        isDragging = false;
+        dropBall(touchX);
+    }
+
+    canvas.addEventListener('touchstart', (e) => handleStart(e.touches[0].clientX));
+    canvas.addEventListener('touchmove', (e) => handleMove(e.touches[0].clientX));
+    canvas.addEventListener('touchend', handleEnd);
+
+    canvas.addEventListener('mousedown', (e) => handleStart(e.clientX));
+    canvas.addEventListener('mousemove', (e) => handleMove(e.clientX));
+    canvas.addEventListener('mouseup', handleEnd);
+
+    // 4. Collision Detection & Merging Mechanics
+    Events.on(engine, 'collisionStart', (event) => {
+        const pairs = event.pairs;
+        for (let i = 0; i < pairs.length; i++) {
+            const { bodyA, bodyB } = pairs[i];
+
+            if (bodyA.label === 'ball' && bodyB.label === 'ball') {
+                if (bodyA.customLevel === bodyB.customLevel && !bodyA.isMerging && !bodyB.isMerging) {
+                    const currentLvl = bodyA.customLevel;
+                    
+                    // Mark as merging to prevent duplicate collision triggers
+                    bodyA.isMerging = true;
+                    bodyB.isMerging = true;
+
+                    // Calculate midpoint for new merged ball
+                    const midX = (bodyA.position.x + bodyB.position.x) / 2;
+                    const midY = (bodyA.position.y + bodyB.position.y) / 2;
+
+                    // Remove old balls
+                    Composite.remove(engine.world, bodyA);
+                    Composite.remove(engine.world, bodyB);
+
+                    // Update Score
+                    score += SCORE_TIERS[currentLvl];
+                    document.getElementById('score-val').innerText = score;
+
+                    const nextLvl = currentLvl + 1;
+
+                    // Level 7 Victory condition!
+                    if (nextLvl >= 6) { 
+                        spawnNewBall(midX, midY, 6);
+                        setTimeout(() => triggerVictory(), 300);
+                    } else {
+                        spawnNewBall(midX, midY, nextLvl);
+                    }
+                }
+            }
+        }
+    });
+
+    function spawnNewBall(x, y, level) {
+        const radius = RADIUS_TIERS[level];
+        const newBody = Bodies.circle(x, y, radius, {
+            restitution: 0.35,
+            friction: 0.2,
+            density: 0.002,
+            label: 'ball',
+            customLevel: level
+        });
+        Composite.add(engine.world, newBody);
+    }
+
+    // 5. Custom Canvas Render Loop (Circular Cropped Photos)
+    (function renderLoop() {
+        Engine.update(engine, 1000 / 60);
+        ctx.clearRect(0, 0, width, height);
+
+        // Draw Deadline / Game-Over Indicator Line
+        ctx.beginPath();
+        ctx.moveTo(0, 120);
+        ctx.lineTo(width, 120);
+        ctx.strokeStyle = "rgba(231, 76, 60, 0.4)";
+        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Render Dropping Preview Ball
+        if (currentBall) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(currentBall.x, currentBall.y, currentBall.radius, 0, Math.PI * 2);
+            ctx.clip();
+            const img = loadedImages[currentBall.level];
+            if (img && img.complete) {
+                ctx.drawImage(img, currentBall.x - currentBall.radius, currentBall.y - currentBall.radius, currentBall.radius * 2, currentBall.radius * 2);
+            }
+            ctx.restore();
+
+            // Preview Guide Line
+            ctx.beginPath();
+            ctx.moveTo(currentBall.x, currentBall.y + currentBall.radius);
+            ctx.lineTo(currentBall.x, height);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        // Render Physical Balls
+        const bodies = Composite.allBodies(engine.world);
+        bodies.forEach(body => {
+            if (body.label === 'ball') {
+                const { x, y } = body.position;
+                const radius = RADIUS_TIERS[body.customLevel];
+                const img = loadedImages[body.customLevel];
+
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(body.angle);
+                ctx.beginPath();
+                ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                ctx.clip();
+
+                if (img && img.complete) {
+                    ctx.drawImage(img, -radius, -radius, radius * 2, radius * 2);
+                } else {
+                    ctx.fillStyle = '#ccc';
+                    ctx.fill();
+                }
+
+                // Ball Outer Ring Border
+                ctx.beginPath();
+                ctx.arc(0, 0, radius - 1, 0, Math.PI * 2);
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        });
+
+        requestAnimationFrame(renderLoop);
+    })();
+
+    // 6. Victory & Settlement Logic
+    function triggerVictory() {
+        gameEnded = true;
+        document.getElementById('final-photo').src = PHOTO_URLS[6]; // Show Level 7 Photo
+        document.getElementById('victory-modal').style.display = 'flex';
+
+        // Trigger Confetti Celebration Animation
+        if (typeof confetti === 'function') {
+            confetti({
+                particleCount: 120,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        }
+    }
+
+    function saveToAlbum() {
+        const card = document.getElementById('poster-card');
+        html2canvas(card).then(canvas => {
+            const link = document.createElement('a');
+            link.download = '终极丑照海报.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    }
+
+    function restartGame() {
+        // Clear all physics bodies except walls
+        const bodies = Composite.allBodies(engine.world);
+        bodies.forEach(body => {
+            if (body.label === 'ball') Composite.remove(engine.world, body);
+        });
+
+        score = 0;
+        document.getElementById('score-val').innerText = '0';
+        document.getElementById('victory-modal').style.display = 'none';
+        gameEnded = false;
+        createPreviewBall();
+    }
+
+    // Initialize Game
+    createPreviewBall();
+</script>
+</body>
+</html>
