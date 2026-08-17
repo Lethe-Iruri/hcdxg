@@ -182,7 +182,7 @@
     </div>
 
     <canvas id="game-canvas"></canvas>
-    <div id="footer-hint">移动光标/手指瞄准，点击松手下落</div>
+    <div id="footer-hint">拖拽/移动瞄准，点击松手下落</div>
 
     <!-- 结算界面 -->
     <div id="settlement-modal">
@@ -208,6 +208,9 @@
         "微信图片_20260817092535_124_43.jpg", // L5
         "微信图片_20260817095418_131_43.jpg"  // L6 终极丑照
     ];
+
+    // 备用颜色列表（避免图片加载失败导致隐形）
+    const FALLBACK_COLORS = ['#ff7675', '#74b9ff', '#55efc4', '#a29bfe', '#ffeaa7', '#fab1a0', '#fd79a8'];
 
     const RADIUS_TIERS = [56, 72, 90, 110, 130, 152, 175];
     const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
@@ -242,9 +245,8 @@
 
     let score = 0;
     let currentBall = null;
-    let pointerX = width / 2; // 记录当前指针的 X 坐标
-    
-    // 稍微降低难度后的概率：L0(55%), L1(35%), L2(10%)
+    let pointerX = width / 2;
+
     function getRandomDropLevel() {
         const rand = Math.random();
         if (rand < 0.55) return 0;      
@@ -256,7 +258,6 @@
     let canDrop = true;
     let gameEnded = false;
 
-    // 限时延长至 100 秒 (1分40秒)
     let timeLeft = 100; 
     let timerInterval = null;
 
@@ -279,11 +280,12 @@
         if (gameEnded) return;
         
         const level = nextBallLevel;
-        const displayRadius = Math.min(48, RADIUS_TIERS[level]);
+        // 顶部展示半径限制，防止太大超出遮挡
+        const displayRadius = Math.min(42, RADIUS_TIERS[level]);
         
         currentBall = {
             x: pointerX,
-            y: 110, // 固定悬浮在虚线上方
+            y: 135, // 调整到警戒线（190px）上方最合适的位置
             radius: displayRadius,
             actualRadius: RADIUS_TIERS[level],
             level: level
@@ -299,7 +301,6 @@
         const rect = container.getBoundingClientRect();
         let targetX = clientX - rect.left;
         
-        // 限制边界
         const radiusLimit = currentBall ? currentBall.actualRadius : 30;
         pointerX = Math.max(radiusLimit, Math.min(width - radiusLimit, targetX));
         
@@ -313,7 +314,7 @@
         canDrop = false;
 
         const body = Bodies.circle(currentBall.x, currentBall.y, currentBall.actualRadius, {
-            restitution: 0.28, // 适度降低反弹率，下落更平稳
+            restitution: 0.28,
             friction: 0.25,
             density: 0.002,
             label: 'ball',
@@ -325,10 +326,9 @@
 
         setTimeout(() => {
             createPreviewBall();
-        }, 400);
+        }, 350);
     }
 
-    // 鼠标/移动端跟随监听：点击前跟随移动，点击时触发下落
     window.addEventListener('mousemove', (e) => updatePointerPosition(e.clientX));
     container.addEventListener('click', (e) => {
         updatePointerPosition(e.clientX);
@@ -390,52 +390,43 @@
         Composite.add(engine.world, newBody);
     }
 
-    function drawImageInCircle(ctx, img, radius, level) {
-        if (!img || !img.complete || img.naturalWidth === 0) {
-            ctx.fillStyle = '#6c5ce7';
-            ctx.fill();
-            return;
-        }
-
-        if (level === 3) {
-            ctx.fillStyle = '#1e1438';
-            ctx.fill();
-
+    // 绘制圆球图案（含图片与色块兜底）
+    function drawBallContent(ctx, img, radius, level) {
+        if (img && img.complete && img.naturalWidth > 0) {
             const imgRatio = img.naturalWidth / img.naturalHeight;
-            let dWidth = radius * 2;
-            let dHeight = radius * 2;
+            let sWidth = img.naturalWidth;
+            let sHeight = img.naturalHeight;
+            let sx = 0, sy = 0;
 
             if (imgRatio > 1) {
-                dHeight = dWidth / imgRatio;
+                sWidth = sHeight;
+                sx = (img.naturalWidth - sWidth) / 2;
             } else {
-                dWidth = dHeight * imgRatio;
+                sHeight = sWidth;
+                sy = (img.naturalHeight - sHeight) / 2;
             }
 
-            ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, -dWidth / 2, -dHeight / 2, dWidth, dHeight);
-            return;
-        }
-
-        const imgRatio = img.naturalWidth / img.naturalHeight;
-        let sWidth = img.naturalWidth;
-        let sHeight = img.naturalHeight;
-        let sx = 0, sy = 0;
-
-        if (imgRatio > 1) {
-            sWidth = sHeight;
-            sx = (img.naturalWidth - sWidth) / 2;
+            ctx.drawImage(img, sx, sy, sWidth, sHeight, -radius, -radius, radius * 2, radius * 2);
         } else {
-            sHeight = sWidth;
-            sy = (img.naturalHeight - sHeight) / 2;
+            // 图片加载失败时用渐变颜色块替代，确保一定显示
+            ctx.fillStyle = FALLBACK_COLORS[level % FALLBACK_COLORS.length];
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("LV." + level, 0, 0);
         }
-
-        ctx.drawImage(img, sx, sy, sWidth, sHeight, -radius, -radius, radius * 2, radius * 2);
     }
 
     (function renderLoop() {
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        // 警戒虚线定在 y=190
+        // 警戒虚线位置 y=190
         const warningY = 190;
         ctx.beginPath();
         ctx.moveTo(0, warningY);
@@ -453,28 +444,37 @@
             }
         });
 
-        // 绘制悬浮跟随中的预备球
+        // 1. 绘制悬浮预备小球
         if (currentBall) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(currentBall.x, currentBall.y, currentBall.radius, 0, Math.PI * 2);
-            ctx.clip();
-            
-            drawImageInCircle(ctx, loadedImages[currentBall.level], currentBall.radius, currentBall.level);
-            ctx.restore();
-
             // 下落对齐辅助虚线
             ctx.beginPath();
-            ctx.moveTo(currentBall.x, currentBall.y + currentBall.radius);
+            ctx.moveTo(currentBall.x, currentBall.y);
             ctx.lineTo(currentBall.x, height);
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
             ctx.setLineDash([4, 4]);
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 1.5;
             ctx.stroke();
             ctx.setLineDash([]);
+
+            ctx.save();
+            ctx.translate(currentBall.x, currentBall.y);
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, currentBall.radius, 0, Math.PI * 2);
+            ctx.clip();
+
+            drawBallContent(ctx, loadedImages[currentBall.level], currentBall.radius, currentBall.level);
+
+            ctx.beginPath();
+            ctx.arc(0, 0, currentBall.radius - 1, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            ctx.restore();
         }
 
-        // 绘制场上小球
+        // 2. 绘制场景中已掉落的小球
         bodies.forEach(body => {
             if (body.label === 'ball') {
                 const { x, y } = body.position;
@@ -483,11 +483,12 @@
                 ctx.save();
                 ctx.translate(x, y);
                 ctx.rotate(body.angle);
+
                 ctx.beginPath();
                 ctx.arc(0, 0, radius, 0, Math.PI * 2);
                 ctx.clip();
 
-                drawImageInCircle(ctx, loadedImages[body.customLevel], radius, body.customLevel);
+                drawBallContent(ctx, loadedImages[body.customLevel], radius, body.customLevel);
 
                 ctx.beginPath();
                 ctx.arc(0, 0, radius - 1, 0, Math.PI * 2);
