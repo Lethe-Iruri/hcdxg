@@ -199,18 +199,16 @@
 </div>
 
 <script>
-    // 重新排列映射后的图片顺序
     const PHOTO_URLS = [
-        "微信图片_20260817092537_125_43.jpg", // L0 (原 L1)
-        "微信图片_20260817095417_130_43.jpg", // L1 (原 L4)
-        "微信图片_20260817095651_132_43.jpg", // L2 (原 L5)
-        "微信图片_20260817095323_129_43.jpg", // L3 (原 L3)
-        "微信图片_20260817095250_128_43.jpg", // L4 (原 L2)
-        "微信图片_20260817092535_124_43.jpg", // L5 (原 L0)
-        "微信图片_20260817095418_131_43.jpg"  // L6 终极丑照 (原 L6)
+        "微信图片_20260817092537_125_43.jpg", // L0
+        "微信图片_20260817095417_130_43.jpg", // L1
+        "微信图片_20260817095651_132_43.jpg", // L2
+        "微信图片_20260817095323_129_43.jpg", // L3
+        "微信图片_20260817095250_128_43.jpg", // L4
+        "微信图片_20260817092535_124_43.jpg", // L5
+        "微信图片_20260817095418_131_43.jpg"  // L6 终极丑照
     ];
 
-    // 适当增大了球体的整体半径 (原 [40, 52.5, 65, 80, 95, 110, 130])
     const RADIUS_TIERS = [48, 62, 78, 95, 112, 130, 150];
     const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
 
@@ -245,19 +243,18 @@
     let score = 0;
     let currentBall = null;
     
-    // 允许随机产生 Level 0, Level 1, Level 2
+    // 新的掉落几率配置：L0(60%), L1(30%), L2(10%)
     function getRandomDropLevel() {
         const rand = Math.random();
-        if (rand < 0.5) return 0;      // 50% 概率 L0
-        if (rand < 0.82) return 1;     // 32% 概率 L1
-        return 2;                      // 18% 概率 L2
+        if (rand < 0.60) return 0;      
+        if (rand < 0.90) return 1;     
+        return 2;                      
     }
 
     let nextBallLevel = getRandomDropLevel();
     let canDrop = true;
     let gameEnded = false;
 
-    // 延长至 120 秒 (2分钟)
     let timeLeft = 120; 
     let timerInterval = null;
 
@@ -280,13 +277,14 @@
         if (gameEnded) return;
         
         const level = nextBallLevel;
-        const radius = RADIUS_TIERS[level];
+        // 顶部预备展示时将显示半径限制在最大 48，避免过大穿透虚线
+        const displayRadius = Math.min(48, RADIUS_TIERS[level]);
         
-        // 将初始位置上升到 y=100（保证在虚线 y=170 上方）
         currentBall = {
             x: width / 2,
-            y: 100, 
-            radius: radius,
+            y: 110, // 高度放置在 y=110
+            radius: displayRadius,
+            actualRadius: RADIUS_TIERS[level],
             level: level
         };
 
@@ -300,14 +298,15 @@
         if (!currentBall || !canDrop) return;
         const rect = container.getBoundingClientRect();
         let targetX = clientX - rect.left;
-        currentBall.x = Math.max(currentBall.radius, Math.min(width - currentBall.radius, targetX));
+        currentBall.x = Math.max(currentBall.actualRadius, Math.min(width - currentBall.actualRadius, targetX));
     }
 
     function dropBall() {
         if (!canDrop || !currentBall || gameEnded) return;
         canDrop = false;
 
-        const body = Bodies.circle(currentBall.x, currentBall.y, currentBall.radius, {
+        // 下落瞬间恢复真实的物理尺寸 RADIUS_TIERS
+        const body = Bodies.circle(currentBall.x, currentBall.y, currentBall.actualRadius, {
             restitution: 0.35,
             friction: 0.3,
             density: 0.002,
@@ -338,7 +337,6 @@
         dropBall();
     });
 
-    // 碰撞与合成逻辑
     Events.on(engine, 'collisionStart', (event) => {
         const pairs = event.pairs;
         for (let i = 0; i < pairs.length; i++) {
@@ -385,7 +383,6 @@
         Composite.add(engine.world, newBody);
     }
 
-    // 优化图像绘制：特别针对 L3 保持原比例完全显示
     function drawImageInCircle(ctx, img, radius, level) {
         if (!img || !img.complete || img.naturalWidth === 0) {
             ctx.fillStyle = '#6c5ce7';
@@ -393,7 +390,6 @@
             return;
         }
 
-        // 针对 Level 3 小球：缩小绘制范围并以透明底完整展示人物
         if (level === 3) {
             ctx.fillStyle = '#1e1438';
             ctx.fill();
@@ -412,7 +408,6 @@
             return;
         }
 
-        // 其他小球保持常规居中裁切填充
         const imgRatio = img.naturalWidth / img.naturalHeight;
         let sWidth = img.naturalWidth;
         let sHeight = img.naturalHeight;
@@ -433,8 +428,8 @@
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        // 警戒线设定在 y=170，预备球 (y=100) 完美停留在其上方
-        const warningY = 170;
+        // 警戒虚线放置在 y=210，完美留出预备球在虚线上方的充足展示空间
+        const warningY = 210;
         ctx.beginPath();
         ctx.moveTo(0, warningY);
         ctx.lineTo(width, warningY);
@@ -444,7 +439,6 @@
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // 检查溢出失败逻辑
         const bodies = Composite.allBodies(engine.world);
         bodies.forEach(body => {
             if (body.label === 'ball' && body.position.y < warningY && Math.abs(body.velocity.y) < 0.2 && !canDrop) {
@@ -452,7 +446,7 @@
             }
         });
 
-        // 绘制顶部操控的预备球
+        // 绘制顶部预备球 (在 warningY 上方)
         if (currentBall) {
             ctx.save();
             ctx.beginPath();
@@ -462,7 +456,7 @@
             drawImageInCircle(ctx, loadedImages[currentBall.level], currentBall.radius, currentBall.level);
             ctx.restore();
 
-            // 下落虚线辅助线
+            // 下落方向虚线
             ctx.beginPath();
             ctx.moveTo(currentBall.x, currentBall.y + currentBall.radius);
             ctx.lineTo(currentBall.x, height);
@@ -473,7 +467,7 @@
             ctx.setLineDash([]);
         }
 
-        // 绘制场景内物理球体
+        // 绘制物理合成球体
         bodies.forEach(body => {
             if (body.label === 'ball') {
                 const { x, y } = body.position;
@@ -501,7 +495,6 @@
         requestAnimationFrame(renderLoop);
     })();
 
-    // 结算：通关
     function triggerVictory() {
         gameEnded = true;
         clearInterval(timerInterval);
@@ -516,7 +509,6 @@
         }
     }
 
-    // 结算：失败
     function triggerGameOver(reason) {
         if(gameEnded) return;
         gameEnded = true;
@@ -553,7 +545,6 @@
         createPreviewBall();
     }
 
-    // 初始化
     startTimer();
     createPreviewBall();
 </script>
