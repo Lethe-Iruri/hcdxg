@@ -85,7 +85,7 @@
             background: #000;
         }
 
-        .timer { font-size: 20px; font-weight: bold; color: #ff7675; letter-spacing: 1px; }
+        .timer { font-size: 20px; font-weight: bold; color: #fdcb6e; letter-spacing: 1px; }
 
         #footer-hint {
             position: absolute;
@@ -178,11 +178,11 @@
             <img id="next-img" class="next-preview" src="" alt="next">
         </div>
 
-        <div class="timer" id="timer-val">01:15</div>
+        <div class="timer" id="timer-val">01:40</div>
     </div>
 
     <canvas id="game-canvas"></canvas>
-    <div id="footer-hint">拖拽小球到目标位置，松手下落</div>
+    <div id="footer-hint">移动光标/手指瞄准，点击松手下落</div>
 
     <!-- 结算界面 -->
     <div id="settlement-modal">
@@ -209,7 +209,6 @@
         "微信图片_20260817095418_131_43.jpg"  // L6 终极丑照
     ];
 
-    // 全局增大球体半径
     const RADIUS_TIERS = [56, 72, 90, 110, 130, 152, 175];
     const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
 
@@ -227,7 +226,7 @@
     const height = container.clientHeight;
 
     const engine = Engine.create({
-        gravity: { x: 0, y: 1.7, scale: 0.001 }
+        gravity: { x: 0, y: 1.6, scale: 0.001 }
     });
 
     const canvas = document.getElementById('game-canvas');
@@ -235,7 +234,7 @@
     canvas.height = height;
     const ctx = canvas.getContext('2d');
 
-    const wallOptions = { isStatic: true, restitution: 0.25, friction: 0.1 };
+    const wallOptions = { isStatic: true, restitution: 0.2, friction: 0.1 };
     const ground = Bodies.rectangle(width / 2, height + 30, width, 60, wallOptions);
     const leftWall = Bodies.rectangle(-30, height / 2, 60, height * 2, wallOptions);
     const rightWall = Bodies.rectangle(width + 30, height / 2, 60, height * 2, wallOptions);
@@ -243,11 +242,13 @@
 
     let score = 0;
     let currentBall = null;
+    let pointerX = width / 2; // 记录当前指针的 X 坐标
     
+    // 稍微降低难度后的概率：L0(55%), L1(35%), L2(10%)
     function getRandomDropLevel() {
         const rand = Math.random();
-        if (rand < 0.75) return 0;      
-        if (rand < 0.95) return 1;     
+        if (rand < 0.55) return 0;      
+        if (rand < 0.90) return 1;     
         return 2;                      
     }
 
@@ -255,7 +256,8 @@
     let canDrop = true;
     let gameEnded = false;
 
-    let timeLeft = 75; 
+    // 限时延长至 100 秒 (1分40秒)
+    let timeLeft = 100; 
     let timerInterval = null;
 
     function startTimer() {
@@ -277,12 +279,11 @@
         if (gameEnded) return;
         
         const level = nextBallLevel;
-        // 顶部展示缩放大小（不超过 50px 半径）
-        const displayRadius = Math.min(50, RADIUS_TIERS[level]);
+        const displayRadius = Math.min(48, RADIUS_TIERS[level]);
         
         currentBall = {
-            x: width / 2,
-            y: 115,
+            x: pointerX,
+            y: 110, // 固定悬浮在虚线上方
             radius: displayRadius,
             actualRadius: RADIUS_TIERS[level],
             level: level
@@ -294,11 +295,17 @@
         canDrop = true;
     }
 
-    function updateBallPosition(clientX) {
-        if (!currentBall || !canDrop) return;
+    function updatePointerPosition(clientX) {
         const rect = container.getBoundingClientRect();
         let targetX = clientX - rect.left;
-        currentBall.x = Math.max(currentBall.actualRadius, Math.min(width - currentBall.actualRadius, targetX));
+        
+        // 限制边界
+        const radiusLimit = currentBall ? currentBall.actualRadius : 30;
+        pointerX = Math.max(radiusLimit, Math.min(width - radiusLimit, targetX));
+        
+        if (currentBall) {
+            currentBall.x = pointerX;
+        }
     }
 
     function dropBall() {
@@ -306,7 +313,7 @@
         canDrop = false;
 
         const body = Bodies.circle(currentBall.x, currentBall.y, currentBall.actualRadius, {
-            restitution: 0.4, 
+            restitution: 0.28, // 适度降低反弹率，下落更平稳
             friction: 0.25,
             density: 0.002,
             label: 'ball',
@@ -321,15 +328,16 @@
         }, 400);
     }
 
-    window.addEventListener('mousemove', (e) => updateBallPosition(e.clientX));
+    // 鼠标/移动端跟随监听：点击前跟随移动，点击时触发下落
+    window.addEventListener('mousemove', (e) => updatePointerPosition(e.clientX));
     container.addEventListener('click', (e) => {
-        updateBallPosition(e.clientX);
+        updatePointerPosition(e.clientX);
         dropBall();
     });
 
     container.addEventListener('touchmove', (e) => {
         if (e.touches.length > 0) {
-            updateBallPosition(e.touches[0].clientX);
+            updatePointerPosition(e.touches[0].clientX);
         }
     });
     container.addEventListener('touchend', (e) => {
@@ -373,7 +381,7 @@
     function spawnNewBall(x, y, level) {
         const radius = RADIUS_TIERS[level];
         const newBody = Bodies.circle(x, y, radius, {
-            restitution: 0.35,
+            restitution: 0.28,
             friction: 0.2,
             density: 0.002,
             label: 'ball',
@@ -427,12 +435,12 @@
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        // 虚线位置定义在 y=190
+        // 警戒虚线定在 y=190
         const warningY = 190;
         ctx.beginPath();
         ctx.moveTo(0, warningY);
         ctx.lineTo(width, warningY);
-        ctx.strokeStyle = "rgba(255, 118, 117, 0.7)";
+        ctx.strokeStyle = "rgba(255, 118, 117, 0.6)";
         ctx.setLineDash([6, 6]);
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -445,6 +453,7 @@
             }
         });
 
+        // 绘制悬浮跟随中的预备球
         if (currentBall) {
             ctx.save();
             ctx.beginPath();
@@ -454,6 +463,7 @@
             drawImageInCircle(ctx, loadedImages[currentBall.level], currentBall.radius, currentBall.level);
             ctx.restore();
 
+            // 下落对齐辅助虚线
             ctx.beginPath();
             ctx.moveTo(currentBall.x, currentBall.y + currentBall.radius);
             ctx.lineTo(currentBall.x, height);
@@ -464,6 +474,7 @@
             ctx.setLineDash([]);
         }
 
+        // 绘制场上小球
         bodies.forEach(body => {
             if (body.label === 'ball') {
                 const { x, y } = body.position;
@@ -533,7 +544,7 @@
         });
 
         score = 0;
-        timeLeft = 75;
+        timeLeft = 100;
         document.getElementById('score-val').innerText = '0';
         document.getElementById('settlement-modal').style.display = 'none';
         gameEnded = false;
