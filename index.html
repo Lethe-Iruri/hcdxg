@@ -85,7 +85,7 @@
             background: #000;
         }
 
-        .timer { font-size: 20px; font-weight: bold; color: #fdcb6e; letter-spacing: 1px; }
+        .timer { font-size: 20px; font-weight: bold; color: #ff7675; letter-spacing: 1px; }
 
         #footer-hint {
             position: absolute;
@@ -178,7 +178,7 @@
             <img id="next-img" class="next-preview" src="" alt="next">
         </div>
 
-        <div class="timer" id="timer-val">02:00</div>
+        <div class="timer" id="timer-val">01:15</div>
     </div>
 
     <canvas id="game-canvas"></canvas>
@@ -209,7 +209,8 @@
         "微信图片_20260817095418_131_43.jpg"  // L6 终极丑照
     ];
 
-    const RADIUS_TIERS = [48, 62, 78, 95, 112, 130, 150];
+    // 全局增大球体半径
+    const RADIUS_TIERS = [56, 72, 90, 110, 130, 152, 175];
     const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
 
     const loadedImages = [];
@@ -226,7 +227,7 @@
     const height = container.clientHeight;
 
     const engine = Engine.create({
-        gravity: { x: 0, y: 1.6, scale: 0.001 }
+        gravity: { x: 0, y: 1.7, scale: 0.001 }
     });
 
     const canvas = document.getElementById('game-canvas');
@@ -234,7 +235,7 @@
     canvas.height = height;
     const ctx = canvas.getContext('2d');
 
-    const wallOptions = { isStatic: true, restitution: 0.2, friction: 0.1 };
+    const wallOptions = { isStatic: true, restitution: 0.25, friction: 0.1 };
     const ground = Bodies.rectangle(width / 2, height + 30, width, 60, wallOptions);
     const leftWall = Bodies.rectangle(-30, height / 2, 60, height * 2, wallOptions);
     const rightWall = Bodies.rectangle(width + 30, height / 2, 60, height * 2, wallOptions);
@@ -243,11 +244,10 @@
     let score = 0;
     let currentBall = null;
     
-    // 新的掉落几率配置：L0(60%), L1(30%), L2(10%)
     function getRandomDropLevel() {
         const rand = Math.random();
-        if (rand < 0.60) return 0;      
-        if (rand < 0.90) return 1;     
+        if (rand < 0.75) return 0;      
+        if (rand < 0.95) return 1;     
         return 2;                      
     }
 
@@ -255,7 +255,7 @@
     let canDrop = true;
     let gameEnded = false;
 
-    let timeLeft = 120; 
+    let timeLeft = 75; 
     let timerInterval = null;
 
     function startTimer() {
@@ -277,12 +277,12 @@
         if (gameEnded) return;
         
         const level = nextBallLevel;
-        // 顶部预备展示时将显示半径限制在最大 48，避免过大穿透虚线
-        const displayRadius = Math.min(48, RADIUS_TIERS[level]);
+        // 顶部展示缩放大小（不超过 50px 半径）
+        const displayRadius = Math.min(50, RADIUS_TIERS[level]);
         
         currentBall = {
             x: width / 2,
-            y: 110, // 高度放置在 y=110
+            y: 115,
             radius: displayRadius,
             actualRadius: RADIUS_TIERS[level],
             level: level
@@ -305,10 +305,9 @@
         if (!canDrop || !currentBall || gameEnded) return;
         canDrop = false;
 
-        // 下落瞬间恢复真实的物理尺寸 RADIUS_TIERS
         const body = Bodies.circle(currentBall.x, currentBall.y, currentBall.actualRadius, {
-            restitution: 0.35,
-            friction: 0.3,
+            restitution: 0.4, 
+            friction: 0.25,
             density: 0.002,
             label: 'ball',
             customLevel: currentBall.level
@@ -319,7 +318,7 @@
 
         setTimeout(() => {
             createPreviewBall();
-        }, 450);
+        }, 400);
     }
 
     window.addEventListener('mousemove', (e) => updateBallPosition(e.clientX));
@@ -428,12 +427,12 @@
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        // 警戒虚线放置在 y=210，完美留出预备球在虚线上方的充足展示空间
-        const warningY = 210;
+        // 虚线位置定义在 y=190
+        const warningY = 190;
         ctx.beginPath();
         ctx.moveTo(0, warningY);
         ctx.lineTo(width, warningY);
-        ctx.strokeStyle = "rgba(255, 118, 117, 0.6)";
+        ctx.strokeStyle = "rgba(255, 118, 117, 0.7)";
         ctx.setLineDash([6, 6]);
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -446,7 +445,6 @@
             }
         });
 
-        // 绘制顶部预备球 (在 warningY 上方)
         if (currentBall) {
             ctx.save();
             ctx.beginPath();
@@ -456,7 +454,6 @@
             drawImageInCircle(ctx, loadedImages[currentBall.level], currentBall.radius, currentBall.level);
             ctx.restore();
 
-            // 下落方向虚线
             ctx.beginPath();
             ctx.moveTo(currentBall.x, currentBall.y + currentBall.radius);
             ctx.lineTo(currentBall.x, height);
@@ -467,7 +464,6 @@
             ctx.setLineDash([]);
         }
 
-        // 绘制物理合成球体
         bodies.forEach(body => {
             if (body.label === 'ball') {
                 const { x, y } = body.position;
@@ -537,7 +533,7 @@
         });
 
         score = 0;
-        timeLeft = 120;
+        timeLeft = 75;
         document.getElementById('score-val').innerText = '0';
         document.getElementById('settlement-modal').style.display = 'none';
         gameEnded = false;
