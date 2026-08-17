@@ -4,18 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>恶搞版合成大丑照</title>
-    <!-- Matter.js Physics Engine -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-    <!-- html2canvas for Save to Album functionality -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- Canvas Confetti for Victory Animation -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: manipulation;
+            touch-action: none;
         }
         body, html {
             margin: 0;
@@ -24,12 +21,11 @@
             height: 100%;
             overflow: hidden;
             background-color: #2c3e50;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
         }
-        /* Fixed viewport container preventing page zoom / resize issues */
         #game-container {
             position: relative;
             width: 100vw;
@@ -39,6 +35,7 @@
             background: #f0e6d2;
             overflow: hidden;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            cursor: pointer;
         }
         #header {
             position: absolute;
@@ -52,6 +49,7 @@
             padding: 0 20px;
             background: rgba(255, 255, 255, 0.4);
             z-index: 10;
+            pointer-events: none;
         }
         .title { font-size: 18px; font-weight: bold; color: #333; }
         .score { font-size: 16px; font-weight: bold; color: #e74c3c; }
@@ -59,9 +57,10 @@
         #game-canvas {
             width: 100%;
             height: 100%;
+            display: block;
         }
 
-        /* Settlement Overlay */
+        /* 结算弹窗 */
         #victory-modal {
             display: none;
             position: absolute;
@@ -130,7 +129,6 @@
     </div>
     <canvas id="game-canvas"></canvas>
 
-    <!-- Victory Modal Popup -->
     <div id="victory-modal">
         <div id="poster-card">
             <img id="final-photo" src="" alt="终极丑照">
@@ -145,23 +143,22 @@
 </div>
 
 <script>
-    // 1. Image configurations (Levels 1 to 7)
-    // Replace these placeholder data URLs or URLs with your 7 photo paths
+    // 1. 照片资源列表（按等级 1-7）
     const PHOTO_URLS = [
-        "微信图片_20260817092535_124_43.jpg", // L1 (Minimum 80px diameter / 40px radius)
+        "微信图片_20260817092535_124_43.jpg", // L1
         "微信图片_20260817092537_125_43.jpg", // L2
         "微信图片_20260817095323_129_43.jpg", // L3
         "微信图片_20260817095417_130_43.jpg", // L4
         "微信图片_20260817095651_132_43.jpg", // L5
         "微信图片_20260817095250_128_43.jpg", // L6
-        "微信图片_20260817095418_131_43.jpg"  // L7 (Ultimate Level)
+        "微信图片_20260817095418_131_43.jpg"  // L7 终极照片
     ];
 
-    // 7 size tiers (Diameters: 80px, 105px, 130px, 160px, 190px, 220px, 260px)
+    // 7 档球体半径（保证最小球直径不小于 80px）
     const RADIUS_TIERS = [40, 52.5, 65, 80, 95, 110, 130];
     const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
 
-    // Preload Images
+    // 预加载图片
     const loadedImages = [];
     PHOTO_URLS.forEach((url) => {
         const img = new Image();
@@ -169,15 +166,15 @@
         loadedImages.push(img);
     });
 
-    // 2. Matter.js Setup
-    const { Engine, Render, Runner, Bodies, Composite, Constraint, Events, Body, Vector } = Matter;
+    // 2. Matter.js 引擎配置
+    const { Engine, Bodies, Composite, Events } = Matter;
 
     const container = document.getElementById('game-container');
     const width = container.clientWidth;
     const height = container.clientHeight;
 
     const engine = Engine.create({
-        gravity: { x: 0, y: 1.5, scale: 0.001 } // Moderate gravity
+        gravity: { x: 0, y: 1.5, scale: 0.001 }
     });
 
     const canvas = document.getElementById('game-canvas');
@@ -185,7 +182,7 @@
     canvas.height = height;
     const ctx = canvas.getContext('2d');
 
-    // Add Container Boundaries
+    // 容器边界墙壁
     const wallOptions = { isStatic: true, restitution: 0.3, friction: 0.1 };
     const ground = Bodies.rectangle(width / 2, height + 30, width, 60, wallOptions);
     const leftWall = Bodies.rectangle(-30, height / 2, 60, height * 2, wallOptions);
@@ -197,11 +194,10 @@
     let canDrop = true;
     let gameEnded = false;
 
-    // 3. Spawning & Drag-and-Drop Control
+    // 3. 产生与操控预备球
     function createPreviewBall() {
         if (gameEnded) return;
-        // Spawns randomly between Level 1 and Level 3 for balanced difficulty (1-2 min gameplay)
-        const level = Math.floor(Math.random() * 3); 
+        const level = Math.floor(Math.random() * 3); // 初始生成 Level 0~2
         const radius = RADIUS_TIERS[level];
         
         currentBall = {
@@ -213,15 +209,21 @@
         canDrop = true;
     }
 
-    function dropBall(targetX) {
+    // 根据鼠标/手指位置限制 X 坐标
+    function updateBallPosition(clientX) {
+        if (!currentBall || !canDrop) return;
+        const rect = container.getBoundingClientRect();
+        let targetX = clientX - rect.left;
+        currentBall.x = Math.max(currentBall.radius, Math.min(width - currentBall.radius, targetX));
+    }
+
+    function dropBall() {
         if (!canDrop || !currentBall || gameEnded) return;
         canDrop = false;
 
-        const clampedX = Math.max(currentBall.radius, Math.min(width - currentBall.radius, targetX));
-        
-        const body = Bodies.circle(clampedX, currentBall.y, currentBall.radius, {
-            restitution: 0.35, // Elasticity / Bounciness
-            friction: 0.2,     // Squeezing / Sliding friction
+        const body = Bodies.circle(currentBall.x, currentBall.y, currentBall.radius, {
+            restitution: 0.35,
+            friction: 0.2,
             density: 0.002,
             label: 'ball',
             customLevel: currentBall.level
@@ -232,41 +234,26 @@
 
         setTimeout(() => {
             createPreviewBall();
-        }, 600);
+        }, 500);
     }
 
-    // Touch and Mouse Event Handling
-    let isDragging = false;
-    let touchX = width / 2;
+    // 鼠标/触摸事件绑定：移动即可控制位置，点击/松开即可下落
+    window.addEventListener('mousemove', (e) => updateBallPosition(e.clientX));
+    container.addEventListener('click', (e) => {
+        updateBallPosition(e.clientX);
+        dropBall();
+    });
 
-    function handleStart(x) {
-        if (!canDrop) return;
-        isDragging = true;
-        touchX = x;
-        if (currentBall) currentBall.x = Math.max(currentBall.radius, Math.min(width - currentBall.radius, touchX));
-    }
+    container.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 0) {
+            updateBallPosition(e.touches[0].clientX);
+        }
+    });
+    container.addEventListener('touchend', (e) => {
+        dropBall();
+    });
 
-    function handleMove(x) {
-        if (!isDragging || !currentBall) return;
-        touchX = x;
-        currentBall.x = Math.max(currentBall.radius, Math.min(width - currentBall.radius, touchX));
-    }
-
-    function handleEnd() {
-        if (!isDragging) return;
-        isDragging = false;
-        dropBall(touchX);
-    }
-
-    canvas.addEventListener('touchstart', (e) => handleStart(e.touches[0].clientX));
-    canvas.addEventListener('touchmove', (e) => handleMove(e.touches[0].clientX));
-    canvas.addEventListener('touchend', handleEnd);
-
-    canvas.addEventListener('mousedown', (e) => handleStart(e.clientX));
-    canvas.addEventListener('mousemove', (e) => handleMove(e.clientX));
-    canvas.addEventListener('mouseup', handleEnd);
-
-    // 4. Collision Detection & Merging Mechanics
+    // 4. 碰撞与合成逻辑
     Events.on(engine, 'collisionStart', (event) => {
         const pairs = event.pairs;
         for (let i = 0; i < pairs.length; i++) {
@@ -276,25 +263,20 @@
                 if (bodyA.customLevel === bodyB.customLevel && !bodyA.isMerging && !bodyB.isMerging) {
                     const currentLvl = bodyA.customLevel;
                     
-                    // Mark as merging to prevent duplicate collision triggers
                     bodyA.isMerging = true;
                     bodyB.isMerging = true;
 
-                    // Calculate midpoint for new merged ball
                     const midX = (bodyA.position.x + bodyB.position.x) / 2;
                     const midY = (bodyA.position.y + bodyB.position.y) / 2;
 
-                    // Remove old balls
                     Composite.remove(engine.world, bodyA);
                     Composite.remove(engine.world, bodyB);
 
-                    // Update Score
                     score += SCORE_TIERS[currentLvl];
                     document.getElementById('score-val').innerText = score;
 
                     const nextLvl = currentLvl + 1;
 
-                    // Level 7 Victory condition!
                     if (nextLvl >= 6) { 
                         spawnNewBall(midX, midY, 6);
                         setTimeout(() => triggerVictory(), 300);
@@ -318,12 +300,37 @@
         Composite.add(engine.world, newBody);
     }
 
-    // 5. Custom Canvas Render Loop (Circular Cropped Photos)
+    // 5. 高清图片绘制与居中不拉伸算法
+    function drawImageInCircle(ctx, img, radius) {
+        if (!img || !img.complete || img.naturalWidth === 0) {
+            ctx.fillStyle = '#ccc';
+            ctx.fill();
+            return;
+        }
+
+        // 计算保持比例的居中裁切 (object-fit: cover)
+        const imgRatio = img.naturalWidth / img.naturalHeight;
+        let sWidth = img.naturalWidth;
+        let sHeight = img.naturalHeight;
+        let sx = 0, sy = 0;
+
+        if (imgRatio > 1) { // 宽图，切两边
+            sWidth = sHeight;
+            sx = (img.naturalWidth - sWidth) / 2;
+        } else { // 长图，切上下
+            sHeight = sWidth;
+            sy = (img.naturalHeight - sHeight) / 2;
+        }
+
+        ctx.drawImage(img, sx, sy, sWidth, sHeight, -radius, -radius, radius * 2, radius * 2);
+    }
+
+    // Canvas 游戏主渲染循环
     (function renderLoop() {
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        // Draw Deadline / Game-Over Indicator Line
+        // 绘制顶部预警虚线
         ctx.beginPath();
         ctx.moveTo(0, 120);
         ctx.lineTo(width, 120);
@@ -333,19 +340,17 @@
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Render Dropping Preview Ball
+        // 绘制正在由鼠标操控的预备球
         if (currentBall) {
             ctx.save();
             ctx.beginPath();
             ctx.arc(currentBall.x, currentBall.y, currentBall.radius, 0, Math.PI * 2);
             ctx.clip();
-            const img = loadedImages[currentBall.level];
-            if (img && img.complete) {
-                ctx.drawImage(img, currentBall.x - currentBall.radius, currentBall.y - currentBall.radius, currentBall.radius * 2, currentBall.radius * 2);
-            }
+            
+            drawImageInCircle(ctx, loadedImages[currentBall.level], currentBall.radius);
             ctx.restore();
 
-            // Preview Guide Line
+            // 绘制下落辅助虚线
             ctx.beginPath();
             ctx.moveTo(currentBall.x, currentBall.y + currentBall.radius);
             ctx.lineTo(currentBall.x, height);
@@ -354,13 +359,12 @@
             ctx.stroke();
         }
 
-        // Render Physical Balls
+        // 绘制下落堆积中的物理球体
         const bodies = Composite.allBodies(engine.world);
         bodies.forEach(body => {
             if (body.label === 'ball') {
                 const { x, y } = body.position;
                 const radius = RADIUS_TIERS[body.customLevel];
-                const img = loadedImages[body.customLevel];
 
                 ctx.save();
                 ctx.translate(x, y);
@@ -369,14 +373,9 @@
                 ctx.arc(0, 0, radius, 0, Math.PI * 2);
                 ctx.clip();
 
-                if (img && img.complete) {
-                    ctx.drawImage(img, -radius, -radius, radius * 2, radius * 2);
-                } else {
-                    ctx.fillStyle = '#ccc';
-                    ctx.fill();
-                }
+                drawImageInCircle(ctx, loadedImages[body.customLevel], radius);
 
-                // Ball Outer Ring Border
+                // 给球体描白色边框，增强立体感
                 ctx.beginPath();
                 ctx.arc(0, 0, radius - 1, 0, Math.PI * 2);
                 ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
@@ -390,13 +389,12 @@
         requestAnimationFrame(renderLoop);
     })();
 
-    // 6. Victory & Settlement Logic
+    // 6. 胜利结算面板
     function triggerVictory() {
         gameEnded = true;
-        document.getElementById('final-photo').src = PHOTO_URLS[6]; // Show Level 7 Photo
+        document.getElementById('final-photo').src = PHOTO_URLS[6];
         document.getElementById('victory-modal').style.display = 'flex';
 
-        // Trigger Confetti Celebration Animation
         if (typeof confetti === 'function') {
             confetti({
                 particleCount: 120,
@@ -417,7 +415,6 @@
     }
 
     function restartGame() {
-        // Clear all physics bodies except walls
         const bodies = Composite.allBodies(engine.world);
         bodies.forEach(body => {
             if (body.label === 'ball') Composite.remove(engine.world, body);
@@ -430,7 +427,7 @@
         createPreviewBall();
     }
 
-    // Initialize Game
+    // 初始化
     createPreviewBall();
 </script>
 </body>
