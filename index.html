@@ -182,7 +182,7 @@
     </div>
 
     <canvas id="game-canvas"></canvas>
-    <div id="footer-hint">拖拽/移动瞄准，点击松手下落</div>
+    <div id="footer-hint">移动光标/手指瞄准，点击松手下落</div>
 
     <!-- 结算界面 -->
     <div id="settlement-modal">
@@ -204,15 +204,15 @@
         "微信图片_20260817095417_130_43.jpg", // L1
         "微信图片_20260817095651_132_43.jpg", // L2
         "微信图片_20260817095323_129_43.jpg", // L3
-        "微信图片_20260817095250_128_43.jpg", // L4
+        "mmexport1786936107905.jpg",          // L4 已更新为最新合照
         "微信图片_20260817092535_124_43.jpg", // L5
         "微信图片_20260817095418_131_43.jpg"  // L6 终极丑照
     ];
 
-    // 备用颜色列表（避免图片加载失败导致隐形）
     const FALLBACK_COLORS = ['#ff7675', '#74b9ff', '#55efc4', '#a29bfe', '#ffeaa7', '#fab1a0', '#fd79a8'];
 
-    const RADIUS_TIERS = [56, 72, 90, 110, 130, 152, 175];
+    // 整体适度小幅度的半径配置
+    const RADIUS_TIERS = [42, 56, 72, 90, 108, 128, 150];
     const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
 
     const loadedImages = [];
@@ -280,12 +280,11 @@
         if (gameEnded) return;
         
         const level = nextBallLevel;
-        // 顶部展示半径限制，防止太大超出遮挡
-        const displayRadius = Math.min(42, RADIUS_TIERS[level]);
+        const displayRadius = Math.min(38, RADIUS_TIERS[level]);
         
         currentBall = {
             x: pointerX,
-            y: 135, // 调整到警戒线（190px）上方最合适的位置
+            y: 135,
             radius: displayRadius,
             actualRadius: RADIUS_TIERS[level],
             level: level
@@ -390,7 +389,6 @@
         Composite.add(engine.world, newBody);
     }
 
-    // 绘制圆球图案（含图片与色块兜底）
     function drawBallContent(ctx, img, radius, level) {
         if (img && img.complete && img.naturalWidth > 0) {
             const imgRatio = img.naturalWidth / img.naturalHeight;
@@ -408,7 +406,6 @@
 
             ctx.drawImage(img, sx, sy, sWidth, sHeight, -radius, -radius, radius * 2, radius * 2);
         } else {
-            // 图片加载失败时用渐变颜色块替代，确保一定显示
             ctx.fillStyle = FALLBACK_COLORS[level % FALLBACK_COLORS.length];
             ctx.beginPath();
             ctx.arc(0, 0, radius, 0, Math.PI * 2);
@@ -426,7 +423,6 @@
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        // 警戒虚线位置 y=190
         const warningY = 190;
         ctx.beginPath();
         ctx.moveTo(0, warningY);
@@ -444,9 +440,8 @@
             }
         });
 
-        // 1. 绘制悬浮预备小球
+        // 绘制悬浮预备球
         if (currentBall) {
-            // 下落对齐辅助虚线
             ctx.beginPath();
             ctx.moveTo(currentBall.x, currentBall.y);
             ctx.lineTo(currentBall.x, height);
@@ -474,7 +469,7 @@
             ctx.restore();
         }
 
-        // 2. 绘制场景中已掉落的小球
+        // 绘制场上球
         bodies.forEach(body => {
             if (body.label === 'ball') {
                 const { x, y } = body.position;
