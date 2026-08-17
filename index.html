@@ -85,7 +85,7 @@
             background: #000;
         }
 
-        .timer { font-size: 20px; font-weight: bold; color: #ff7675; letter-spacing: 1px; }
+        .timer { font-size: 20px; font-weight: bold; color: #fdcb6e; letter-spacing: 1px; }
 
         #footer-hint {
             position: absolute;
@@ -104,7 +104,7 @@
             display: block;
         }
 
-        /* 结算弹窗 (通关/失败) */
+        /* 结算弹窗 */
         #settlement-modal {
             display: none;
             position: absolute;
@@ -178,7 +178,7 @@
             <img id="next-img" class="next-preview" src="" alt="next">
         </div>
 
-        <div class="timer" id="timer-val">01:00</div>
+        <div class="timer" id="timer-val">02:00</div>
     </div>
 
     <canvas id="game-canvas"></canvas>
@@ -199,17 +199,19 @@
 </div>
 
 <script>
+    // 重新排列映射后的图片顺序
     const PHOTO_URLS = [
-        "微信图片_20260817092535_124_43.jpg", // L1
-        "微信图片_20260817092537_125_43.jpg", // L2
-        "微信图片_20260817095323_129_43.jpg", // L3
-        "微信图片_20260817095417_130_43.jpg", // L4
-        "微信图片_20260817095651_132_43.jpg", // L5
-        "微信图片_20260817095250_128_43.jpg", // L6
-        "微信图片_20260817095418_131_43.jpg"  // L7 终极照片
+        "微信图片_20260817092537_125_43.jpg", // L0 (原 L1)
+        "微信图片_20260817095417_130_43.jpg", // L1 (原 L4)
+        "微信图片_20260817095651_132_43.jpg", // L2 (原 L5)
+        "微信图片_20260817095323_129_43.jpg", // L3 (原 L3)
+        "微信图片_20260817095250_128_43.jpg", // L4 (原 L2)
+        "微信图片_20260817092535_124_43.jpg", // L5 (原 L0)
+        "微信图片_20260817095418_131_43.jpg"  // L6 终极丑照 (原 L6)
     ];
 
-    const RADIUS_TIERS = [40, 52.5, 65, 80, 95, 110, 130];
+    // 适当增大了球体的整体半径 (原 [40, 52.5, 65, 80, 95, 110, 130])
+    const RADIUS_TIERS = [48, 62, 78, 95, 112, 130, 150];
     const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
 
     const loadedImages = [];
@@ -226,7 +228,7 @@
     const height = container.clientHeight;
 
     const engine = Engine.create({
-        gravity: { x: 0, y: 1.8, scale: 0.001 } // 适当增加重力加速度
+        gravity: { x: 0, y: 1.6, scale: 0.001 }
     });
 
     const canvas = document.getElementById('game-canvas');
@@ -242,13 +244,21 @@
 
     let score = 0;
     let currentBall = null;
-    // 增加难度：生成只限制在 0 和 1 级（80% 几率产生 L0，20% 几率产生 L1）
-    let nextBallLevel = Math.random() < 0.8 ? 0 : 1; 
+    
+    // 允许随机产生 Level 0, Level 1, Level 2
+    function getRandomDropLevel() {
+        const rand = Math.random();
+        if (rand < 0.5) return 0;      // 50% 概率 L0
+        if (rand < 0.82) return 1;     // 32% 概率 L1
+        return 2;                      // 18% 概率 L2
+    }
+
+    let nextBallLevel = getRandomDropLevel();
     let canDrop = true;
     let gameEnded = false;
 
-    // 60秒倒计时（增加紧迫感）
-    let timeLeft = 60; 
+    // 延长至 120 秒 (2分钟)
+    let timeLeft = 120; 
     let timerInterval = null;
 
     function startTimer() {
@@ -272,15 +282,15 @@
         const level = nextBallLevel;
         const radius = RADIUS_TIERS[level];
         
+        // 将初始位置上升到 y=100（保证在虚线 y=170 上方）
         currentBall = {
             x: width / 2,
-            y: 110,
+            y: 100, 
             radius: radius,
             level: level
         };
 
-        // 刷新下一个球等级
-        nextBallLevel = Math.random() < 0.85 ? 0 : 1;
+        nextBallLevel = getRandomDropLevel();
         document.getElementById('next-img').src = PHOTO_URLS[nextBallLevel];
 
         canDrop = true;
@@ -298,7 +308,7 @@
         canDrop = false;
 
         const body = Bodies.circle(currentBall.x, currentBall.y, currentBall.radius, {
-            restitution: 0.4, // 增加弹力阻碍堆叠
+            restitution: 0.35,
             friction: 0.3,
             density: 0.002,
             label: 'ball',
@@ -328,7 +338,7 @@
         dropBall();
     });
 
-    // 碰撞检测与合成
+    // 碰撞与合成逻辑
     Events.on(engine, 'collisionStart', (event) => {
         const pairs = event.pairs;
         for (let i = 0; i < pairs.length; i++) {
@@ -375,13 +385,34 @@
         Composite.add(engine.world, newBody);
     }
 
-    function drawImageInCircle(ctx, img, radius) {
+    // 优化图像绘制：特别针对 L3 保持原比例完全显示
+    function drawImageInCircle(ctx, img, radius, level) {
         if (!img || !img.complete || img.naturalWidth === 0) {
             ctx.fillStyle = '#6c5ce7';
             ctx.fill();
             return;
         }
 
+        // 针对 Level 3 小球：缩小绘制范围并以透明底完整展示人物
+        if (level === 3) {
+            ctx.fillStyle = '#1e1438';
+            ctx.fill();
+
+            const imgRatio = img.naturalWidth / img.naturalHeight;
+            let dWidth = radius * 2;
+            let dHeight = radius * 2;
+
+            if (imgRatio > 1) {
+                dHeight = dWidth / imgRatio;
+            } else {
+                dWidth = dHeight * imgRatio;
+            }
+
+            ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, -dWidth / 2, -dHeight / 2, dWidth, dHeight);
+            return;
+        }
+
+        // 其他小球保持常规居中裁切填充
         const imgRatio = img.naturalWidth / img.naturalHeight;
         let sWidth = img.naturalWidth;
         let sHeight = img.naturalHeight;
@@ -402,10 +433,11 @@
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        // 顶端警戒线 (高度下降至 150)
+        // 警戒线设定在 y=170，预备球 (y=100) 完美停留在其上方
+        const warningY = 170;
         ctx.beginPath();
-        ctx.moveTo(0, 150);
-        ctx.lineTo(width, 150);
+        ctx.moveTo(0, warningY);
+        ctx.lineTo(width, warningY);
         ctx.strokeStyle = "rgba(255, 118, 117, 0.6)";
         ctx.setLineDash([6, 6]);
         ctx.lineWidth = 2;
@@ -415,20 +447,22 @@
         // 检查溢出失败逻辑
         const bodies = Composite.allBodies(engine.world);
         bodies.forEach(body => {
-            if (body.label === 'ball' && body.position.y < 150 && Math.abs(body.velocity.y) < 0.2 && !canDrop) {
+            if (body.label === 'ball' && body.position.y < warningY && Math.abs(body.velocity.y) < 0.2 && !canDrop) {
                 triggerGameOver("超过警戒线，堆叠失败！");
             }
         });
 
+        // 绘制顶部操控的预备球
         if (currentBall) {
             ctx.save();
             ctx.beginPath();
             ctx.arc(currentBall.x, currentBall.y, currentBall.radius, 0, Math.PI * 2);
             ctx.clip();
             
-            drawImageInCircle(ctx, loadedImages[currentBall.level], currentBall.radius);
+            drawImageInCircle(ctx, loadedImages[currentBall.level], currentBall.radius, currentBall.level);
             ctx.restore();
 
+            // 下落虚线辅助线
             ctx.beginPath();
             ctx.moveTo(currentBall.x, currentBall.y + currentBall.radius);
             ctx.lineTo(currentBall.x, height);
@@ -439,6 +473,7 @@
             ctx.setLineDash([]);
         }
 
+        // 绘制场景内物理球体
         bodies.forEach(body => {
             if (body.label === 'ball') {
                 const { x, y } = body.position;
@@ -451,7 +486,7 @@
                 ctx.arc(0, 0, radius, 0, Math.PI * 2);
                 ctx.clip();
 
-                drawImageInCircle(ctx, loadedImages[body.customLevel], radius);
+                drawImageInCircle(ctx, loadedImages[body.customLevel], radius, body.customLevel);
 
                 ctx.beginPath();
                 ctx.arc(0, 0, radius - 1, 0, Math.PI * 2);
@@ -510,7 +545,7 @@
         });
 
         score = 0;
-        timeLeft = 60;
+        timeLeft = 120;
         document.getElementById('score-val').innerText = '0';
         document.getElementById('settlement-modal').style.display = 'none';
         gameEnded = false;
