@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>恶搞版合成大丑照</title>
+    <!-- Matter.js 物理引擎 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <!-- html2canvas 用于保存海报 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Canvas Confetti 胜利礼花特效 -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * {
@@ -20,7 +23,7 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #2c3e50;
+            background: linear-gradient(135deg, #181528 0%, #09070F 100%);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
             justify-content: center;
@@ -32,36 +35,77 @@
             max-width: 480px;
             height: 100vh;
             max-height: 840px;
-            background: #f0e6d2;
+            background: linear-gradient(180deg, #2b1a4a 0%, #170d2c 100%);
             overflow: hidden;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            border-radius: 12px;
             cursor: pointer;
         }
+        
+        /* 顶部 UI 区域 */
         #header {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: 60px;
+            height: 70px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 20px;
-            background: rgba(255, 255, 255, 0.4);
+            padding: 10px 20px;
             z-index: 10;
             pointer-events: none;
+            color: #ffffff;
         }
-        .title { font-size: 18px; font-weight: bold; color: #333; }
-        .score { font-size: 16px; font-weight: bold; color: #e74c3c; }
         
+        .score-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .score-label { font-size: 12px; color: #a29bfe; }
+        .score-val { font-size: 24px; font-weight: bold; color: #fdcb6e; }
+
+        .next-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+        }
+        .next-label { font-size: 13px; color: #dfe6e9; font-weight: 500; }
+        .next-preview {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 2px solid #a29bfe;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .timer { font-size: 20px; font-weight: bold; color: #ff7675; letter-spacing: 1px; }
+
+        #footer-hint {
+            position: absolute;
+            bottom: 15px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.4);
+            pointer-events: none;
+        }
+
         #game-canvas {
             width: 100%;
             height: 100%;
             display: block;
         }
 
-        /* 结算弹窗 */
-        #victory-modal {
+        /* 结算弹窗 (通关/失败) */
+        #settlement-modal {
             display: none;
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -77,7 +121,7 @@
             padding: 15px;
             border-radius: 12px;
             text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             max-width: 300px;
             width: 100%;
         }
@@ -124,26 +168,37 @@
 
 <div id="game-container">
     <div id="header">
-        <div class="title">合成大丑照</div>
-        <div class="score">得分: <span id="score-val">0</span></div>
-    </div>
-    <canvas id="game-canvas"></canvas>
+        <div class="score-box">
+            <span class="score-label">分数</span>
+            <span class="score-val" id="score-val">0</span>
+        </div>
+        
+        <div class="next-box">
+            <span class="next-label">下一个</span>
+            <img id="next-img" class="next-preview" src="" alt="next">
+        </div>
 
-    <div id="victory-modal">
+        <div class="timer" id="timer-val">01:00</div>
+    </div>
+
+    <canvas id="game-canvas"></canvas>
+    <div id="footer-hint">拖拽小球到目标位置，松手下落</div>
+
+    <!-- 结算界面 -->
+    <div id="settlement-modal">
         <div id="poster-card">
-            <img id="final-photo" src="" alt="终极丑照">
-            <div class="victory-title">丑出天际！通关胜利！</div>
-            <div class="victory-sub">你成功解锁了等级7终极丑照！</div>
+            <img id="final-photo" src="" alt="结算照片">
+            <div class="victory-title" id="modal-title">丑出天际！通关胜利！</div>
+            <div class="victory-sub" id="modal-sub">你成功解锁了等级7终极丑照！</div>
         </div>
         <div class="btn-group">
-            <button class="btn btn-save" onclick="saveToAlbum()">保存到相册</button>
-            <button class="btn btn-restart" onclick="restartGame()">再玩一次</button>
+            <button class="btn btn-save" id="btn-save" onclick="saveToAlbum()">保存到相册</button>
+            <button class="btn btn-restart" onclick="restartGame()">再试一次</button>
         </div>
     </div>
 </div>
 
 <script>
-    // 1. 照片资源列表（按等级 1-7）
     const PHOTO_URLS = [
         "微信图片_20260817092535_124_43.jpg", // L1
         "微信图片_20260817092537_125_43.jpg", // L2
@@ -154,11 +209,9 @@
         "微信图片_20260817095418_131_43.jpg"  // L7 终极照片
     ];
 
-    // 7 档球体半径（保证最小球直径不小于 80px）
     const RADIUS_TIERS = [40, 52.5, 65, 80, 95, 110, 130];
     const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
 
-    // 预加载图片
     const loadedImages = [];
     PHOTO_URLS.forEach((url) => {
         const img = new Image();
@@ -166,7 +219,6 @@
         loadedImages.push(img);
     });
 
-    // 2. Matter.js 引擎配置
     const { Engine, Bodies, Composite, Events } = Matter;
 
     const container = document.getElementById('game-container');
@@ -174,7 +226,7 @@
     const height = container.clientHeight;
 
     const engine = Engine.create({
-        gravity: { x: 0, y: 1.5, scale: 0.001 }
+        gravity: { x: 0, y: 1.8, scale: 0.001 } // 适当增加重力加速度
     });
 
     const canvas = document.getElementById('game-canvas');
@@ -182,8 +234,7 @@
     canvas.height = height;
     const ctx = canvas.getContext('2d');
 
-    // 容器边界墙壁
-    const wallOptions = { isStatic: true, restitution: 0.3, friction: 0.1 };
+    const wallOptions = { isStatic: true, restitution: 0.2, friction: 0.1 };
     const ground = Bodies.rectangle(width / 2, height + 30, width, 60, wallOptions);
     const leftWall = Bodies.rectangle(-30, height / 2, 60, height * 2, wallOptions);
     const rightWall = Bodies.rectangle(width + 30, height / 2, 60, height * 2, wallOptions);
@@ -191,25 +242,50 @@
 
     let score = 0;
     let currentBall = null;
+    // 增加难度：生成只限制在 0 和 1 级（80% 几率产生 L0，20% 几率产生 L1）
+    let nextBallLevel = Math.random() < 0.8 ? 0 : 1; 
     let canDrop = true;
     let gameEnded = false;
 
-    // 3. 产生与操控预备球
+    // 60秒倒计时（增加紧迫感）
+    let timeLeft = 60; 
+    let timerInterval = null;
+
+    function startTimer() {
+        if(timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if (gameEnded) return;
+            timeLeft--;
+            let m = String(Math.floor(timeLeft / 60)).padStart(2, '0');
+            let s = String(timeLeft % 60).padStart(2, '0');
+            document.getElementById('timer-val').innerText = `${m}:${s}`;
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                triggerGameOver("时间耗尽，未能限时合成大丑照！");
+            }
+        }, 1000);
+    }
+
     function createPreviewBall() {
         if (gameEnded) return;
-        const level = Math.floor(Math.random() * 3); // 初始生成 Level 0~2
+        
+        const level = nextBallLevel;
         const radius = RADIUS_TIERS[level];
         
         currentBall = {
             x: width / 2,
-            y: 70,
+            y: 110,
             radius: radius,
             level: level
         };
+
+        // 刷新下一个球等级
+        nextBallLevel = Math.random() < 0.85 ? 0 : 1;
+        document.getElementById('next-img').src = PHOTO_URLS[nextBallLevel];
+
         canDrop = true;
     }
 
-    // 根据鼠标/手指位置限制 X 坐标
     function updateBallPosition(clientX) {
         if (!currentBall || !canDrop) return;
         const rect = container.getBoundingClientRect();
@@ -222,8 +298,8 @@
         canDrop = false;
 
         const body = Bodies.circle(currentBall.x, currentBall.y, currentBall.radius, {
-            restitution: 0.35,
-            friction: 0.2,
+            restitution: 0.4, // 增加弹力阻碍堆叠
+            friction: 0.3,
             density: 0.002,
             label: 'ball',
             customLevel: currentBall.level
@@ -234,10 +310,9 @@
 
         setTimeout(() => {
             createPreviewBall();
-        }, 500);
+        }, 450);
     }
 
-    // 鼠标/触摸事件绑定：移动即可控制位置，点击/松开即可下落
     window.addEventListener('mousemove', (e) => updateBallPosition(e.clientX));
     container.addEventListener('click', (e) => {
         updateBallPosition(e.clientX);
@@ -253,7 +328,7 @@
         dropBall();
     });
 
-    // 4. 碰撞与合成逻辑
+    // 碰撞检测与合成
     Events.on(engine, 'collisionStart', (event) => {
         const pairs = event.pairs;
         for (let i = 0; i < pairs.length; i++) {
@@ -300,24 +375,22 @@
         Composite.add(engine.world, newBody);
     }
 
-    // 5. 高清图片绘制与居中不拉伸算法
     function drawImageInCircle(ctx, img, radius) {
         if (!img || !img.complete || img.naturalWidth === 0) {
-            ctx.fillStyle = '#ccc';
+            ctx.fillStyle = '#6c5ce7';
             ctx.fill();
             return;
         }
 
-        // 计算保持比例的居中裁切 (object-fit: cover)
         const imgRatio = img.naturalWidth / img.naturalHeight;
         let sWidth = img.naturalWidth;
         let sHeight = img.naturalHeight;
         let sx = 0, sy = 0;
 
-        if (imgRatio > 1) { // 宽图，切两边
+        if (imgRatio > 1) {
             sWidth = sHeight;
             sx = (img.naturalWidth - sWidth) / 2;
-        } else { // 长图，切上下
+        } else {
             sHeight = sWidth;
             sy = (img.naturalHeight - sHeight) / 2;
         }
@@ -325,22 +398,28 @@
         ctx.drawImage(img, sx, sy, sWidth, sHeight, -radius, -radius, radius * 2, radius * 2);
     }
 
-    // Canvas 游戏主渲染循环
     (function renderLoop() {
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        // 绘制顶部预警虚线
+        // 顶端警戒线 (高度下降至 150)
         ctx.beginPath();
-        ctx.moveTo(0, 120);
-        ctx.lineTo(width, 120);
-        ctx.strokeStyle = "rgba(231, 76, 60, 0.4)";
-        ctx.setLineDash([5, 5]);
+        ctx.moveTo(0, 150);
+        ctx.lineTo(width, 150);
+        ctx.strokeStyle = "rgba(255, 118, 117, 0.6)";
+        ctx.setLineDash([6, 6]);
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // 绘制正在由鼠标操控的预备球
+        // 检查溢出失败逻辑
+        const bodies = Composite.allBodies(engine.world);
+        bodies.forEach(body => {
+            if (body.label === 'ball' && body.position.y < 150 && Math.abs(body.velocity.y) < 0.2 && !canDrop) {
+                triggerGameOver("超过警戒线，堆叠失败！");
+            }
+        });
+
         if (currentBall) {
             ctx.save();
             ctx.beginPath();
@@ -350,17 +429,16 @@
             drawImageInCircle(ctx, loadedImages[currentBall.level], currentBall.radius);
             ctx.restore();
 
-            // 绘制下落辅助虚线
             ctx.beginPath();
             ctx.moveTo(currentBall.x, currentBall.y + currentBall.radius);
             ctx.lineTo(currentBall.x, height);
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+            ctx.setLineDash([4, 4]);
             ctx.lineWidth = 1;
             ctx.stroke();
+            ctx.setLineDash([]);
         }
 
-        // 绘制下落堆积中的物理球体
-        const bodies = Composite.allBodies(engine.world);
         bodies.forEach(body => {
             if (body.label === 'ball') {
                 const { x, y } = body.position;
@@ -375,10 +453,9 @@
 
                 drawImageInCircle(ctx, loadedImages[body.customLevel], radius);
 
-                // 给球体描白色边框，增强立体感
                 ctx.beginPath();
                 ctx.arc(0, 0, radius - 1, 0, Math.PI * 2);
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
                 ctx.lineWidth = 3;
                 ctx.stroke();
 
@@ -389,19 +466,31 @@
         requestAnimationFrame(renderLoop);
     })();
 
-    // 6. 胜利结算面板
+    // 结算：通关
     function triggerVictory() {
         gameEnded = true;
+        clearInterval(timerInterval);
         document.getElementById('final-photo').src = PHOTO_URLS[6];
-        document.getElementById('victory-modal').style.display = 'flex';
+        document.getElementById('modal-title').innerText = "丑出天际！通关胜利！";
+        document.getElementById('modal-sub').innerText = "你成功合成终极丑照！";
+        document.getElementById('btn-save').style.display = "block";
+        document.getElementById('settlement-modal').style.display = 'flex';
 
         if (typeof confetti === 'function') {
-            confetti({
-                particleCount: 120,
-                spread: 70,
-                origin: { y: 0.6 }
-            });
+            confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
         }
+    }
+
+    // 结算：失败
+    function triggerGameOver(reason) {
+        if(gameEnded) return;
+        gameEnded = true;
+        clearInterval(timerInterval);
+        document.getElementById('final-photo').src = PHOTO_URLS[0];
+        document.getElementById('modal-title').innerText = "挑战失败！";
+        document.getElementById('modal-sub').innerText = reason;
+        document.getElementById('btn-save').style.display = "none";
+        document.getElementById('settlement-modal').style.display = 'flex';
     }
 
     function saveToAlbum() {
@@ -421,13 +510,16 @@
         });
 
         score = 0;
+        timeLeft = 60;
         document.getElementById('score-val').innerText = '0';
-        document.getElementById('victory-modal').style.display = 'none';
+        document.getElementById('settlement-modal').style.display = 'none';
         gameEnded = false;
+        startTimer();
         createPreviewBall();
     }
 
     // 初始化
+    startTimer();
     createPreviewBall();
 </script>
 </body>
