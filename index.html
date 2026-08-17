@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- 1. 移动端视口设置：禁止缩放与手势调整 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>恶搞版合成大丑照</title>
     <!-- Matter.js 物理引擎 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
@@ -15,7 +16,8 @@
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none;
+            -webkit-touch-callout: none; /* 2. 禁用 iOS 长按弹出菜单 */
+            touch-action: none;          /* 3. 禁用移动端默认滑动手势及下拉刷新 */
         }
         body, html {
             margin: 0;
@@ -23,36 +25,46 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: linear-gradient(135deg, #181528 0%, #09070F 100%);
+            background: #09070F;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
         }
+        
+        /* 4. 适配手机屏幕，兼容全面屏/刘海屏安全区 */
         #game-container {
             position: relative;
             width: 100vw;
-            max-width: 480px;
             height: 100vh;
-            max-height: 840px;
+            max-width: 480px;
+            max-height: 920px;
             background: linear-gradient(180deg, #2b1a4a 0%, #170d2c 100%);
             overflow: hidden;
             box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            border-radius: 12px;
-            cursor: pointer;
+            /* 兼容 iOS 异形屏顶部/底部 Safe Area */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        @media (min-width: 481px) {
+            #game-container {
+                border-radius: 16px;
+                height: 95vh;
+            }
         }
         
         /* 顶部 UI 区域 */
         #header {
             position: absolute;
-            top: 0;
+            top: env(safe-area-inset-top, 0px);
             left: 0;
             width: 100%;
-            height: 70px;
+            height: 65px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 20px;
+            padding: 8px 16px;
             z-index: 10;
             pointer-events: none;
             color: #ffffff;
@@ -63,38 +75,38 @@
             flex-direction: column;
             align-items: flex-start;
         }
-        .score-label { font-size: 12px; color: #a29bfe; }
-        .score-val { font-size: 24px; font-weight: bold; color: #fdcb6e; }
+        .score-label { font-size: 11px; color: #a29bfe; }
+        .score-val { font-size: 22px; font-weight: bold; color: #fdcb6e; }
 
         .next-box {
             display: flex;
             align-items: center;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 4px 12px;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.12);
+            padding: 4px 10px;
             border-radius: 20px;
             backdrop-filter: blur(5px);
         }
-        .next-label { font-size: 13px; color: #dfe6e9; font-weight: 500; }
+        .next-label { font-size: 12px; color: #dfe6e9; font-weight: 500; }
         .next-preview {
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             border: 2px solid #a29bfe;
             object-fit: cover;
             background: #000;
         }
 
-        .timer { font-size: 20px; font-weight: bold; color: #fdcb6e; letter-spacing: 1px; }
+        .timer { font-size: 18px; font-weight: bold; color: #fdcb6e; letter-spacing: 0.5px; }
 
         #footer-hint {
             position: absolute;
-            bottom: 15px;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
             left: 0;
             width: 100%;
             text-align: center;
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.4);
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.45);
             pointer-events: none;
         }
 
@@ -104,7 +116,7 @@
             display: block;
         }
 
-        /* 统一弹窗样式 */
+        /* 移动端弹窗适配 */
         .modal-overlay {
             display: flex;
             position: absolute;
@@ -114,7 +126,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 24px;
         }
 
         #difficulty-card, #poster-card {
@@ -123,20 +135,20 @@
             border-radius: 16px;
             text-align: center;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            max-width: 320px;
             width: 100%;
+            max-width: 320px;
         }
 
         .modal-title {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 900;
             color: #2d3436;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .modal-desc {
-            font-size: 14px;
+            font-size: 13px;
             color: #636e72;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
             line-height: 1.4;
         }
 
@@ -146,19 +158,19 @@
             margin: 8px 0;
             border: none;
             border-radius: 25px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             cursor: pointer;
-            transition: transform 0.1s, background 0.2s;
+            transition: transform 0.1s;
             color: white;
         }
-        .diff-btn:active { transform: scale(0.96); }
+        .diff-btn:active { transform: scale(0.95); }
         .btn-easy { background: linear-gradient(135deg, #2ecc71, #27ae60); }
         .btn-hard { background: linear-gradient(135deg, #e74c3c, #c0392b); }
 
         #poster-card img {
             width: 100%;
-            height: 260px;
+            height: 240px;
             object-fit: cover;
             border-radius: 8px;
             border: 3px solid #ffcc00;
@@ -178,7 +190,6 @@
             font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            transition: transform 0.1s;
         }
         .btn:active { transform: scale(0.95); }
         .btn-save { background: #2ecc71; color: white; }
@@ -203,15 +214,15 @@
     </div>
 
     <canvas id="game-canvas"></canvas>
-    <div id="footer-hint">移动光标/手指瞄准，点击松手下落</div>
+    <div id="footer-hint">👈 滑动屏幕瞄准，抬手落球 👉</div>
 
     <!-- 难度选择弹窗 -->
     <div id="difficulty-modal" class="modal-overlay">
         <div id="difficulty-card">
             <div class="modal-title">选择游戏难度</div>
-            <div class="modal-desc">简单模式场地富余，困难模式极具挑战！</div>
-            <button class="diff-btn btn-easy" onclick="selectDifficulty('easy')">😊 简单模式 (小球偏小)</button>
-            <button class="diff-btn btn-hard" onclick="selectDifficulty('hard')">🔥 困难模式 (小球放大)</button>
+            <div class="modal-desc">简单模式场地充裕，困难模式极具挑战！</div>
+            <button class="diff-btn btn-easy" onclick="selectDifficulty('easy')">😊 简单模式 (推荐全屏挑战)</button>
+            <button class="diff-btn btn-hard" onclick="selectDifficulty('hard')">🔥 困难模式 (小球加大)</button>
         </div>
     </div>
 
@@ -235,20 +246,19 @@
         "微信图片_20260817095417_130_43.jpg", // L1
         "微信图片_20260817095651_132_43.jpg", // L2
         "微信图片_20260817095323_129_43.jpg", // L3
-        "mmexport1786936107905.jpg",          // L4 最新照片
+        "mmexport1786936107905.jpg",          // L4
         "微信图片_20260817092535_124_43.jpg", // L5
         "微信图片_20260817095418_131_43.jpg"  // L6 终极丑照
     ];
 
     const FALLBACK_COLORS = ['#ff7675', '#74b9ff', '#55efc4', '#a29bfe', '#ffeaa7', '#fab1a0', '#fd79a8'];
 
-    // 难度预设的尺寸数组
     const RADIUS_CONFIG = {
-        easy: [42, 56, 72, 90, 108, 128, 150],  // 简单难度尺寸
-        hard: [56, 72, 90, 110, 130, 152, 175]  // 困难难度尺寸
+        easy: [38, 50, 65, 80, 98, 115, 135],   // 针对手机窄屏优化后的简单尺寸
+        hard: [50, 65, 82, 100, 118, 138, 160]  // 困难尺寸
     };
 
-    let RADIUS_TIERS = RADIUS_CONFIG.easy; // 默认简单
+    let RADIUS_TIERS = RADIUS_CONFIG.easy;
     const SCORE_TIERS = [10, 20, 40, 80, 160, 320, 640];
 
     const loadedImages = [];
@@ -261,20 +271,31 @@
     const { Engine, Bodies, Composite, Events } = Matter;
 
     const container = document.getElementById('game-container');
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let width, height, dpr;
+
+    // 5. 高分屏（Retina）高清自适应渲染与缩放适配
+    function resizeCanvas() {
+        width = container.clientWidth;
+        height = container.clientHeight;
+        dpr = window.devicePixelRatio || 1;
+
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        ctx.scale(dpr, dpr);
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
 
     const engine = Engine.create({
         gravity: { x: 0, y: 1.6, scale: 0.001 }
     });
 
-    const canvas = document.getElementById('game-canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-
+    // 边界墙体
     const wallOptions = { isStatic: true, restitution: 0.2, friction: 0.1 };
-    const ground = Bodies.rectangle(width / 2, height + 30, width, 60, wallOptions);
+    const ground = Bodies.rectangle(width / 2, height + 30, width * 2, 60, wallOptions);
     const leftWall = Bodies.rectangle(-30, height / 2, 60, height * 2, wallOptions);
     const rightWall = Bodies.rectangle(width + 30, height / 2, 60, height * 2, wallOptions);
     Composite.add(engine.world, [ground, leftWall, rightWall]);
@@ -282,6 +303,7 @@
     let score = 0;
     let currentBall = null;
     let pointerX = width / 2;
+    let isTouching = false;
 
     function getRandomDropLevel() {
         const rand = Math.random();
@@ -329,11 +351,11 @@
         if (gameEnded) return;
         
         const level = nextBallLevel;
-        const displayRadius = Math.min(40, RADIUS_TIERS[level]);
+        const displayRadius = Math.min(36, RADIUS_TIERS[level]);
         
         currentBall = {
             x: pointerX,
-            y: 135,
+            y: 120,
             radius: displayRadius,
             actualRadius: RADIUS_TIERS[level],
             level: level
@@ -377,19 +399,34 @@
         }, 350);
     }
 
-    window.addEventListener('mousemove', (e) => updatePointerPosition(e.clientX));
-    container.addEventListener('click', (e) => {
-        updatePointerPosition(e.clientX);
-        dropBall();
-    });
-
-    container.addEventListener('touchmove', (e) => {
+    // 6. 移动端触控事件优化 (手指按住移动瞄准，松开下落)
+    container.addEventListener('touchstart', (e) => {
         if (e.touches.length > 0) {
+            isTouching = true;
             updatePointerPosition(e.touches[0].clientX);
         }
-    });
+    }, { passive: false });
+
+    container.addEventListener('touchmove', (e) => {
+        if (isTouching && e.touches.length > 0) {
+            updatePointerPosition(e.touches[0].clientX);
+        }
+    }, { passive: false });
+
     container.addEventListener('touchend', (e) => {
-        dropBall();
+        if (isTouching) {
+            isTouching = false;
+            dropBall();
+        }
+    });
+
+    // 兼顾桌面端鼠标操作
+    window.addEventListener('mousemove', (e) => updatePointerPosition(e.clientX));
+    container.addEventListener('click', (e) => {
+        if (!('ontouchstart' in window)) { // 防止移动端重复触发 click
+            updatePointerPosition(e.clientX);
+            dropBall();
+        }
     });
 
     Events.on(engine, 'collisionStart', (event) => {
@@ -472,7 +509,7 @@
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        const warningY = 190;
+        const warningY = 170;
         ctx.beginPath();
         ctx.moveTo(0, warningY);
         ctx.lineTo(width, warningY);
@@ -518,7 +555,7 @@
             ctx.restore();
         }
 
-        // 绘制场上小球
+        // 绘制场上球
         bodies.forEach(body => {
             if (body.label === 'ball') {
                 const { x, y } = body.position;
@@ -557,7 +594,7 @@
         document.getElementById('settlement-modal').style.display = 'flex';
 
         if (typeof confetti === 'function') {
-            confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+            confetti({ particleCount: 100, spread: 60, origin: { y: 0.6 } });
         }
     }
 
