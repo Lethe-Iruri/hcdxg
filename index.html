@@ -2,7 +2,6 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <!-- 1. 移动端视口设置：禁止缩放与手势调整 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>恶搞版合成大丑照</title>
     <!-- Matter.js 物理引擎 -->
@@ -16,8 +15,8 @@
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            -webkit-touch-callout: none; /* 2. 禁用 iOS 长按弹出菜单 */
-            touch-action: none;          /* 3. 禁用移动端默认滑动手势及下拉刷新 */
+            -webkit-touch-callout: none;
+            touch-action: none;
         }
         body, html {
             margin: 0;
@@ -32,7 +31,6 @@
             align-items: center;
         }
         
-        /* 4. 适配手机屏幕，兼容全面屏/刘海屏安全区 */
         #game-container {
             position: relative;
             width: 100vw;
@@ -42,7 +40,6 @@
             background: linear-gradient(180deg, #2b1a4a 0%, #170d2c 100%);
             overflow: hidden;
             box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            /* 兼容 iOS 异形屏顶部/底部 Safe Area */
             padding-top: env(safe-area-inset-top);
             padding-bottom: env(safe-area-inset-bottom);
         }
@@ -89,8 +86,8 @@
         }
         .next-label { font-size: 12px; color: #dfe6e9; font-weight: 500; }
         .next-preview {
-            width: 32px;
-            height: 32px;
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
             border: 2px solid #a29bfe;
             object-fit: cover;
@@ -116,7 +113,6 @@
             display: block;
         }
 
-        /* 移动端弹窗适配 */
         .modal-overlay {
             display: flex;
             position: absolute;
@@ -220,9 +216,9 @@
     <div id="difficulty-modal" class="modal-overlay">
         <div id="difficulty-card">
             <div class="modal-title">选择游戏难度</div>
-            <div class="modal-desc">简单模式场地充裕，困难模式极具挑战！</div>
-            <button class="diff-btn btn-easy" onclick="selectDifficulty('easy')">😊 简单模式 (推荐全屏挑战)</button>
-            <button class="diff-btn btn-hard" onclick="selectDifficulty('hard')">🔥 困难模式 (小球加大)</button>
+            <div class="modal-desc">已为移动端缩小球体，操作更加丝滑！</div>
+            <button class="diff-btn btn-easy" onclick="selectDifficulty('easy')">😊 简单模式 (空间大·易通关)</button>
+            <button class="diff-btn btn-hard" onclick="selectDifficulty('hard')">🔥 困难模式 (球体稍大·考操作)</button>
         </div>
     </div>
 
@@ -253,9 +249,10 @@
 
     const FALLBACK_COLORS = ['#ff7675', '#74b9ff', '#55efc4', '#a29bfe', '#ffeaa7', '#fab1a0', '#fd79a8'];
 
+    // 针对手机移动端进一步优化的半径尺寸（单位：px）
     const RADIUS_CONFIG = {
-        easy: [38, 50, 65, 80, 98, 115, 135],   // 针对手机窄屏优化后的简单尺寸
-        hard: [50, 65, 82, 100, 118, 138, 160]  // 困难尺寸
+        easy: [30, 40, 52, 66, 82, 100, 120],  // 简单：极高的容错率
+        hard: [38, 50, 65, 80, 98, 118, 140]   // 困难：适中具有挑战性
     };
 
     let RADIUS_TIERS = RADIUS_CONFIG.easy;
@@ -276,7 +273,6 @@
 
     let width, height, dpr;
 
-    // 5. 高分屏（Retina）高清自适应渲染与缩放适配
     function resizeCanvas() {
         width = container.clientWidth;
         height = container.clientHeight;
@@ -293,7 +289,6 @@
         gravity: { x: 0, y: 1.6, scale: 0.001 }
     });
 
-    // 边界墙体
     const wallOptions = { isStatic: true, restitution: 0.2, friction: 0.1 };
     const ground = Bodies.rectangle(width / 2, height + 30, width * 2, 60, wallOptions);
     const leftWall = Bodies.rectangle(-30, height / 2, 60, height * 2, wallOptions);
@@ -351,11 +346,11 @@
         if (gameEnded) return;
         
         const level = nextBallLevel;
-        const displayRadius = Math.min(36, RADIUS_TIERS[level]);
+        const displayRadius = Math.min(30, RADIUS_TIERS[level]);
         
         currentBall = {
             x: pointerX,
-            y: 120,
+            y: 115,
             radius: displayRadius,
             actualRadius: RADIUS_TIERS[level],
             level: level
@@ -371,7 +366,7 @@
         const rect = container.getBoundingClientRect();
         let targetX = clientX - rect.left;
         
-        const radiusLimit = currentBall ? currentBall.actualRadius : 30;
+        const radiusLimit = currentBall ? currentBall.actualRadius : 25;
         pointerX = Math.max(radiusLimit, Math.min(width - radiusLimit, targetX));
         
         if (currentBall) {
@@ -399,7 +394,7 @@
         }, 350);
     }
 
-    // 6. 移动端触控事件优化 (手指按住移动瞄准，松开下落)
+    // 移动端触控优化
     container.addEventListener('touchstart', (e) => {
         if (e.touches.length > 0) {
             isTouching = true;
@@ -420,10 +415,9 @@
         }
     });
 
-    // 兼顾桌面端鼠标操作
     window.addEventListener('mousemove', (e) => updatePointerPosition(e.clientX));
     container.addEventListener('click', (e) => {
-        if (!('ontouchstart' in window)) { // 防止移动端重复触发 click
+        if (!('ontouchstart' in window)) {
             updatePointerPosition(e.clientX);
             dropBall();
         }
@@ -498,7 +492,7 @@
             ctx.fill();
             
             ctx.fillStyle = "#ffffff";
-            ctx.font = "bold 16px sans-serif";
+            ctx.font = "bold 14px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText("LV." + level, 0, 0);
@@ -509,7 +503,7 @@
         Engine.update(engine, 1000 / 60);
         ctx.clearRect(0, 0, width, height);
 
-        const warningY = 170;
+        const warningY = 160;
         ctx.beginPath();
         ctx.moveTo(0, warningY);
         ctx.lineTo(width, warningY);
@@ -574,7 +568,7 @@
                 ctx.beginPath();
                 ctx.arc(0, 0, radius - 1, 0, Math.PI * 2);
                 ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 2.5;
                 ctx.stroke();
 
                 ctx.restore();
@@ -589,7 +583,7 @@
         clearInterval(timerInterval);
         document.getElementById('final-photo').src = PHOTO_URLS[6];
         document.getElementById('modal-title').innerText = "丑出天际！通关胜利！";
-        document.getElementById('modal-sub').innerText = "你成功合成终极丑照！";
+        document.getElementById('modal-sub').innerText = "你成功解锁了等级7终极丑照！";
         document.getElementById('btn-save').style.display = "block";
         document.getElementById('settlement-modal').style.display = 'flex';
 
